@@ -5,6 +5,26 @@
   <title>XAF Raw Export</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
+    /* ── bouwman.tools kleurenpalet ── */
+    :root {
+      --bt-primair:      #2C1A0E;
+      --bt-terracotta:   #C0522A;
+      --bt-sienna:       #E8784F;
+      --bt-zand:         #F5EBE0;
+      --bt-page:         #FDF6F0;
+      --bt-border:       #E8C4A8;
+      --bt-muted:        #A07860;
+    }
+    .bt-footer-minimal {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding-top: 8px; border-top: 0.5px solid var(--bt-border);
+      font-size: 11px; color: var(--bt-muted); position: relative; cursor: default;
+    }
+    .bt-footer-minimal .bt-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bt-terracotta); flex-shrink: 0; }
+    .bt-footer-minimal strong { color: var(--bt-terracotta); font-weight: 500; }
+    .bt-footer-minimal .bt-tooltip { display: none; position: absolute; bottom: 28px; left: 0; background: var(--bt-primair); color: var(--bt-zand); font-size: 11px; padding: 6px 12px; border-radius: 6px; white-space: nowrap; }
+    .bt-footer-minimal:hover .bt-tooltip { display: block; }
+
     *, *::before, *::after { box-sizing: border-box; }
     body { font-family: system-ui, -apple-system, sans-serif; background: #eef2f7; min-height: 100vh; margin: 0; padding: 24px 16px; }
     .card { max-width: 660px; margin: 0 auto; background: #fff; border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,.10), 0 1px 4px rgba(0,0,0,.06); overflow: hidden; }
@@ -137,6 +157,14 @@
         <button id="exportBtn">&#8659;&nbsp; Download Excel</button>
         <button id="csvBtn">&#8659;&nbsp; Download CSV</button>
       </div>
+
+      <footer style="margin-top: 32px; padding-top: 12px; border-top: 0.5px solid var(--bt-border); display: flex; justify-content: flex-end;">
+        <div class="bt-footer-minimal">
+          <div class="bt-dot"></div>
+          <span>een <strong>bouwman.tools</strong> product</span>
+          <div class="bt-tooltip">Gebouwd door Sylvain Bouwman, met veel liefde en enthousiasme</div>
+        </div>
+      </footer>
 
     </div>
   </div>
