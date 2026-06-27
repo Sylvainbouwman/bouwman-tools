@@ -1,0 +1,174 @@
+<!--
+  bouwman.tools — design snippet v1
+  Terracotta / chocoladebruin palet
+  Plak de CSS-variabelen in de <style> van elke tool.
+  Kies één footer-variant en plak die onderaan de tool.
+-->
+
+<style>
+  /* ── bouwman.tools kleurenpalet ── */
+  :root {
+    --bt-primair:      #2C1A0E;   /* chocoladebruin */
+    --bt-terracotta:   #C0522A;   /* terracotta */
+    --bt-sienna:       #E8784F;   /* lichte terracotta / accent */
+    --bt-zand:         #F5EBE0;   /* lichte achtergrond */
+    --bt-page:         #FDF6F0;   /* paginaachtergrond */
+    --bt-border:       #E8C4A8;   /* randen */
+    --bt-muted:        #A07860;   /* subtekst */
+  }
+</style>
+
+
+<!-- ══════════════════════════════════════════════
+     FOOTER VARIANT 1 — donkere badge
+     Gebruik dit op een eigen landingspagina of startscherm
+     ══════════════════════════════════════════════ -->
+<style>
+  .bt-footer-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bt-primair);
+    border-radius: 8px;
+    padding: 10px 18px;
+  }
+  .bt-footer-badge .bt-icon {
+    font-size: 16px;
+    color: var(--bt-sienna);
+  }
+  .bt-footer-badge .bt-brand {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--bt-zand);
+  }
+  .bt-footer-badge .bt-brand span {
+    color: var(--bt-sienna);
+  }
+  .bt-footer-badge .bt-tagline {
+    font-size: 10px;
+    color: var(--bt-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .bt-footer-badge:hover .bt-tagline::after {
+    content: ' — gebouwd met veel liefde en enthousiasme';
+  }
+</style>
+
+<div class="bt-footer-badge">
+  <span class="bt-icon">🔨</span>
+  <div>
+    <div class="bt-brand">bouwman<span>.tools</span></div>
+    <div class="bt-tagline">gebouwd door bouwman</div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════
+     FOOTER VARIANT 2 — minimale lijn (aanbevolen)
+     Gebruik dit in bestaande Join- en DK-tools
+     Plak dit onderaan de tool, vlak voor </body>
+     ══════════════════════════════════════════════ -->
+<style>
+  .bt-footer-minimal {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 0.5px solid var(--bt-border);
+    font-size: 11px;
+    color: var(--bt-muted);
+    position: relative;
+    cursor: default;
+  }
+  .bt-footer-minimal .bt-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--bt-terracotta);
+    flex-shrink: 0;
+  }
+  .bt-footer-minimal strong {
+    color: var(--bt-terracotta);
+    font-weight: 500;
+  }
+  .bt-footer-minimal .bt-tooltip {
+    display: none;
+    position: absolute;
+    bottom: 28px;
+    left: 0;
+    background: var(--bt-primair);
+    color: var(--bt-zand);
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  .bt-footer-minimal:hover .bt-tooltip {
+    display: block;
+  }
+</style>
+
+<footer style="margin-top: 32px; padding-top: 12px; border-top: 0.5px solid var(--bt-border); display: flex; justify-content: flex-end;">
+  <div class="bt-footer-minimal">
+    <div class="bt-dot"></div>
+    <span>een <strong>bouwman.tools</strong> product</span>
+    <div class="bt-tooltip">Gebouwd door Sylvain Bouwman</div>
+  </div>
+</footer>
+
+
+<!-- ══════════════════════════════════════════════
+     FOOTER VARIANT 3 — stempel
+     Werkt goed als compacte badge rechtsboven of rechtsonder
+     ══════════════════════════════════════════════ -->
+<style>
+  .bt-footer-stamp {
+    display: inline-flex;
+    align-items: stretch;
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid var(--bt-terracotta);
+    cursor: default;
+    position: relative;
+  }
+  .bt-footer-stamp .bt-stamp-left {
+    background: var(--bt-primair);
+    padding: 7px 12px;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+  }
+  .bt-footer-stamp .bt-stamp-right {
+    background: var(--bt-zand);
+    padding: 7px 12px;
+    display: flex;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--bt-primair);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .bt-footer-stamp .bt-tooltip {
+    display: none;
+    position: absolute;
+    bottom: 36px;
+    left: 0;
+    background: var(--bt-primair);
+    color: var(--bt-zand);
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  .bt-footer-stamp:hover .bt-tooltip {
+    display: block;
+  }
+</style>
+
+<div class="bt-footer-stamp">
+  <div class="bt-stamp-left">🔨</div>
+  <div class="bt-stamp-right">bouwman.tools</div>
+  <div class="bt-tooltip">Gebouwd door Sylvain Bouwman</div>
+</div>
