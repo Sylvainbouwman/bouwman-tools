@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>bouwman.tools</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #FDF6F0;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: #2C1A0E;
+      padding: 40px 32px 36px;
+      text-align: center;
+    }
+    .logo {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #F5EBE0;
+      letter-spacing: -.01em;
+      margin-bottom: 8px;
+    }
+    .logo span { color: #E8784F; }
+    header p {
+      margin: 0;
+      font-size: 0.88rem;
+      color: #A07860;
+    }
+    main {
+      flex: 1;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 48px 24px;
+      width: 100%;
+    }
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: #A07860;
+      margin-bottom: 16px;
+    }
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .tool-card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: #fff;
+      border: 1px solid #E8C4A8;
+      border-radius: 12px;
+      padding: 22px 22px 20px;
+      text-decoration: none;
+      color: inherit;
+      transition: border-color .2s, box-shadow .2s, transform .15s;
+    }
+    .tool-card:hover {
+      border-color: #C0522A;
+      box-shadow: 0 4px 16px rgba(192,82,42,.12);
+      transform: translateY(-2px);
+    }
+    .tool-icon { font-size: 1.6rem; line-height: 1; }
+    .tool-name { font-size: 1rem; font-weight: 700; color: #2C1A0E; }
+    .tool-desc { font-size: 0.82rem; color: #A07860; line-height: 1.4; }
+    .tool-tag {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #C0522A;
+      background: #FDF6F0;
+      border: 1px solid #E8C4A8;
+      border-radius: 4px;
+      padding: 2px 8px;
+    }
+    footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 0.75rem;
+      color: #A07860;
+      border-top: 1px solid #E8C4A8;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">bouwman<span>.tools</span></div>
+    <p>Gebouwd door Sylvain Bouwman</p>
+  </header>
+
+  <main>
+    <div class="section-label">Beschikbare tools</div>
+    <div class="tools-grid">
+
+      <a href="xaf_export.html" class="tool-card">
+        <div class="tool-icon">📊</div>
+        <div class="tool-name">XAF Raw Export</div>
+        <div class="tool-desc">Verwerk XAF-auditfiles (3.2 &amp; 4.0) naar Excel of CSV — volledig in de browser, ook voor bestanden van 700 MB+</div>
+        <div class="tool-tag">Accountancy</div>
+      </a>
+
+    </div>
+  </main>
+
+  <footer>bouwman.tools &mdash; gebouwd door Sylvain Bouwman</footer>
+
+</body>
+</html>
