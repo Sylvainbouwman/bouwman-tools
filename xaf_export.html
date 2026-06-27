@@ -19,13 +19,17 @@
     #status { margin-top: 20px; font-size: 0.9rem; min-height: 1.4em; }
     #status.ok  { color: #1a7a3c; }
     #status.err { color: #b00020; }
+    #prog-wrap { margin-top: 12px; display: none; }
+    #prog-track { background: #e0e4ea; border-radius: 4px; height: 8px; overflow: hidden; }
+    #prog-fill  { height: 100%; background: #1E2D4E; border-radius: 4px; width: 0%; transition: width .25s; }
+    #prog-label { font-size: 0.8rem; color: #666; margin-top: 5px; }
     button {
       margin-top: 20px; padding: 10px 24px; background: #1E2D4E; color: white;
-      border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer;
-      display: none;
+      border: none; border-radius: 6px; font-size: 0.95rem; cursor: pointer; display: none;
     }
     button:hover { background: #16233c; }
-    #info { margin-top: 20px; font-size: 0.85rem; color: #444; }
+    button:disabled { background: #8090a8; cursor: default; }
+    #info { margin-top: 16px; font-size: 0.85rem; color: #444; }
   </style>
 </head>
 <body>
@@ -39,21 +43,23 @@
   <input type="file" id="fileInput" accept=".xaf,.xml">
 
   <div id="status"></div>
+  <div id="prog-wrap">
+    <div id="prog-track"><div id="prog-fill"></div></div>
+    <div id="prog-label"></div>
+  </div>
   <div id="info"></div>
   <button id="exportBtn">Download Excel</button>
 
-  <script>
-  (function () {
-    var parsed = null;
-
-    // ── helpers ────────────────────────────────────────────────────────────
-    function ln(el) { return el.localName; }
-
+  <!--
+    Worker code in a non-executed script block.
+    This avoids string-escaping issues when embedding worker source inline.
+  -->
+  <script id="worker-src" type="text/worker-src">
     function childTexts(el) {
       var out = {};
       for (var i = 0; i < el.children.length; i++) {
         var c = el.children[i];
-        if (c.children.length === 0) out[ln(c)] = c.textContent.trim();
+        if (c.children.length === 0) out[c.localName] = c.textContent.trim();
       }
       return out;
     }
@@ -63,209 +69,347 @@
       return (tp || '').trim().toUpperCase() === 'C' ? -v : v;
     }
 
-    function allByLocalName(root, name) {
-      var result = [];
-      var all = root.getElementsByTagName('*');
-      for (var i = 0; i < all.length; i++) {
-        if (ln(all[i]) === name) result.push(all[i]);
-      }
-      return result;
+    function allByLocal(root, name) {
+      var res = [], all = root.getElementsByTagName('*');
+      for (var i = 0; i < all.length; i++)
+        if (all[i].localName === name) res.push(all[i]);
+      return res;
     }
 
-    // ── parser ────────────────────────────────────────────────────────────
-    function parseXAF(xmlDoc) {
-      var root = xmlDoc.documentElement;
+    function parseHeader(xmlText) {
+      var doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+      var r = doc.documentElement;
 
-      // Bedrijfsgegevens
-      var headerEl  = allByLocalName(root, 'header')[0]  || null;
-      var companyEl = allByLocalName(root, 'company')[0] || null;
-      var hi = headerEl  ? childTexts(headerEl)  : {};
-      var ci = companyEl ? childTexts(companyEl) : {};
-      var bedrijfsgegevens = [
+      // Detect XAF version from xmlns namespace URI
+      var ns = r.getAttribute('xmlns') || r.namespaceURI || '';
+      var nsMatch = ns.match(/XAF[\/_](\d+[\._]\d+)/i);
+      var xafVersion = nsMatch ? nsMatch[1].replace('_', '.') : (ns ? ns : 'onbekend');
+
+      var hi = {}, ci = {};
+      var hEl = allByLocal(r, 'header')[0];
+      var cEl = allByLocal(r, 'company')[0];
+      if (hEl) hi = childTexts(hEl);
+      if (cEl) ci = childTexts(cEl);
+
+      var bedrijf = [
         ['Onderdeel', 'Waarde'],
-        ['Bedrijfsnaam',  ci.companyName              || ''],
-        ['KvK-nummer',    ci.Commercenr               || ''],
-        ['BTW-nummer',    ci.taxRegIdent              || ''],
-        ['BTW-land',      ci.taxRegistrationCountry   || ''],
-        ['Boekjaar',      hi.fiscalYear               || ''],
-        ['Startdatum',    hi.startDate                || ''],
-        ['Einddatum',     hi.endDate                  || ''],
-        ['Valuta',        hi.curCode                  || ''],
-        ['Aangemaakt op', hi.dateCreated              || ''],
-        ['Software',      hi.softwareDesc             || ''],
-        ['Softwareversie',hi.softwareVersion          || ''],
-        ['RGS-versie',    hi.RGSVersion               || ''],
+        ['XAF-versie',     xafVersion],
+        ['Bedrijfsnaam',   ci.companyName                          || ''],
+        // XAF 4.0 uses Commercenr, XAF 3.2 uses companyIdent
+        ['KvK-nummer',     ci.Commercenr || ci.companyIdent        || ''],
+        ['BTW-nummer',     ci.taxRegIdent                          || ''],
+        ['BTW-land',       ci.taxRegistrationCountry               || ''],
+        ['Boekjaar',       hi.fiscalYear                           || ''],
+        ['Startdatum',     hi.startDate                            || ''],
+        ['Einddatum',      hi.endDate                              || ''],
+        ['Valuta',         hi.curCode                              || ''],
+        ['Aangemaakt op',  hi.dateCreated                          || ''],
+        ['Software',       hi.softwareDesc                         || ''],
+        ['Softwareversie', hi.softwareVersion                      || ''],
+        ['RGS-versie',     hi.RGSVersion                           || ''],
       ];
 
-      // Grootboekrekeningen
-      var accHeaders = ['accID', 'accDesc', 'accTp', 'RGScode'];
-      var accounts = [accHeaders];
-      allByLocalName(root, 'ledgerAccount').forEach(function (el) {
+      // RGScode = XAF 4.0, leadCode = XAF 3.2 equivalent
+      var accH = ['accID', 'accDesc', 'accTp', 'RGScode', 'leadCode', 'leadDescription'];
+      var accs = [accH];
+      allByLocal(r, 'ledgerAccount').forEach(function(el) {
         var t = childTexts(el);
-        accounts.push(accHeaders.map(function (k) { return t[k] || ''; }));
+        accs.push(accH.map(function(k) { return t[k] || ''; }));
       });
 
-      // BTW-codes
-      var vatHeaders = ['vatID', 'vatDesc', 'vatToPayAccID', 'vatToClaimAccID'];
-      var vatCodes = [vatHeaders];
-      allByLocalName(root, 'vatCode').forEach(function (el) {
+      var vatH = ['vatID', 'vatDesc', 'vatToPayAccID', 'vatToClaimAccID'];
+      var vats = [vatH];
+      allByLocal(r, 'vatCode').forEach(function(el) {
         var t = childTexts(el);
-        vatCodes.push(vatHeaders.map(function (k) { return t[k] || ''; }));
+        vats.push(vatH.map(function(k) { return t[k] || ''; }));
       });
 
-      // Beginsaldi
-      var obHeaders = ['nr', 'accID', 'amnt', 'amntTp', 'bedrag'];
-      var obLines = [obHeaders];
-      allByLocalName(root, 'obLine').forEach(function (el) {
+      var obH = ['nr', 'accID', 'amnt', 'amntTp', 'bedrag'];
+      var obs = [obH];
+      allByLocal(r, 'obLine').forEach(function(el) {
         var t = childTexts(el);
-        obLines.push([
-          t.nr     || '',
-          t.accID  || '',
-          parseFloat(t.amnt) || 0,
-          t.amntTp || '',
-          signed(t.amnt, t.amntTp),
-        ]);
+        obs.push([t.nr || '', t.accID || '', parseFloat(t.amnt) || 0, t.amntTp || '', signed(t.amnt, t.amntTp)]);
       });
 
-      // Mutaties (journal > transaction > trLine [> vat])
-      var lineHeaders = [
-        'jrnID', 'jrn_desc', 'jrnTp',
-        'tx_nr', 'tx_desc', 'tx_periodNumber', 'tx_trDt',
-        'line_nr', 'line_accID', 'line_docRef', 'line_effDate',
-        'line_desc', 'line_amnt', 'line_amntTp', 'bedrag',
-        'vatID', 'vatAmnt', 'vatPerc',
-      ];
-      var lines = [lineHeaders];
+      // Debiteur/crediteur stamgegevens (aanwezig in zowel 3.2 als 4.0)
+      var csH = ['custSupID', 'custSupName', 'custSupTp', 'commerceNr', 'taxRegIdent', 'contact', 'telephone', 'eMail'];
+      var custSups = [csH];
+      allByLocal(r, 'customerSupplier').forEach(function(el) {
+        var t = childTexts(el);
+        custSups.push(csH.map(function(k) { return t[k] || ''; }));
+      });
 
-      allByLocalName(root, 'journal').forEach(function (jrnEl) {
-        var jt = childTexts(jrnEl);
-        var jrnID    = jt.jrnID  || '';
-        var jrnDesc  = jt.desc   || '';
-        var jrnTp    = jt.jrnTp  || '';
+      return { bedrijf: bedrijf, accs: accs, vats: vats, obs: obs, custSups: custSups };
+    }
 
-        for (var t = 0; t < jrnEl.children.length; t++) {
-          var txEl = jrnEl.children[t];
-          if (ln(txEl) !== 'transaction') continue;
-          var tx = childTexts(txEl);
+    var LINE_H = [
+      'jrnID', 'jrn_desc', 'jrnTp',
+      'tx_nr', 'tx_desc', 'tx_periodNumber', 'tx_trDt',
+      'line_nr', 'line_accID', 'line_docRef', 'line_effDate',
+      'line_desc', 'line_amnt', 'line_amntTp', 'bedrag',
+      'vatID', 'vatAmnt', 'vatPerc',
+    ];
 
-          for (var l = 0; l < txEl.children.length; l++) {
-            var trEl = txEl.children[l];
-            if (ln(trEl) !== 'trLine') continue;
-            var li = childTexts(trEl);
+    function parseJournal(jrnEl, rows) {
+      var jt = childTexts(jrnEl);
+      var jrnID = jt.jrnID || '', jrnDesc = jt.desc || '', jrnTp = jt.jrnTp || '';
 
-            var vatInfo = {};
-            for (var v = 0; v < trEl.children.length; v++) {
-              if (ln(trEl.children[v]) === 'vat') {
-                vatInfo = childTexts(trEl.children[v]);
-                break;
-              }
+      for (var t = 0; t < jrnEl.children.length; t++) {
+        var txEl = jrnEl.children[t];
+        if (txEl.localName !== 'transaction') continue;
+        var tx = childTexts(txEl);
+
+        for (var l = 0; l < txEl.children.length; l++) {
+          var trEl = txEl.children[l];
+          if (trEl.localName !== 'trLine') continue;
+          var li = childTexts(trEl);
+
+          var vi = {};
+          for (var v = 0; v < trEl.children.length; v++) {
+            if (trEl.children[v].localName === 'vat') { vi = childTexts(trEl.children[v]); break; }
+          }
+
+          rows.push([
+            jrnID, jrnDesc, jrnTp,
+            tx.nr || '', tx.desc || '', tx.periodNumber || '', tx.trDt || '',
+            li.nr || '', li.accID || '', li.docRef || '', li.effDate || '',
+            li.desc || '', parseFloat(li.amnt) || 0, li.amntTp || '', signed(li.amnt, li.amntTp),
+            vi.vatID || '', parseFloat(vi.vatAmnt) || 0, vi.vatPerc || '',
+          ]);
+        }
+      }
+    }
+
+    self.onmessage = async function(e) {
+      var file = e.data;
+      try {
+        var mb = Math.round(file.size / 1024 / 1024);
+        self.postMessage({ type: 'status', msg: 'Inlezen (' + mb + ' MB)…' });
+
+        // Read the full file as text — fine for the browser, avoids one huge DOM
+        var text = await file.text();
+
+        self.postMessage({ type: 'status', msg: 'Structuur analyseren…' });
+
+        // Split at <transactions so we never parse 700 MB as one DOM
+        var tIdx = text.search(/<transactions[\s>]/);
+
+        var headerXml, transText;
+        if (tIdx === -1) {
+          headerXml = text;
+          transText = null;
+        } else {
+          headerXml = text.slice(0, tIdx) + '</auditfile>';
+          transText = text.slice(tIdx);
+        }
+        text = null; // release reference to allow GC
+
+        var hd = parseHeader(headerXml);
+        headerXml = null;
+
+        var rows = [];
+
+        if (transText) {
+          // Count journals without building an array (split would allocate N+1 substrings)
+          var jCount = 0;
+          var cp = 0;
+          while ((cp = transText.indexOf('</journal>', cp)) !== -1) { jCount++; cp += 10; }
+
+          self.postMessage({ type: 'status', msg: 'Mutaties verwerken (' + jCount + ' dagboeken)…' });
+
+          var pos = 0, done = 0;
+          while (true) {
+            var jS = transText.indexOf('<journal', pos);
+            if (jS === -1) break;
+            var jE = transText.indexOf('</journal>', jS);
+            if (jE === -1) break;
+            jE += 10;
+
+            // Parse one journal at a time — each is a few KB, not 700 MB
+            var doc = new DOMParser().parseFromString('<r>' + transText.slice(jS, jE) + '</r>', 'application/xml');
+            var jEl = doc.documentElement.firstElementChild;
+            if (jEl) parseJournal(jEl, rows);
+
+            pos = jE;
+            done++;
+            if (done % 100 === 0 || done === jCount) {
+              self.postMessage({ type: 'progress', done: done, total: jCount, lines: rows.length });
             }
-
-            lines.push([
-              jrnID,
-              jrnDesc,
-              jrnTp,
-              tx.nr            || '',
-              tx.desc          || '',
-              tx.periodNumber  || '',
-              tx.trDt          || '',
-              li.nr            || '',
-              li.accID         || '',
-              li.docRef        || '',
-              li.effDate       || '',
-              li.desc          || '',
-              parseFloat(li.amnt) || 0,
-              li.amntTp        || '',
-              signed(li.amnt, li.amntTp),
-              vatInfo.vatID    || '',
-              parseFloat(vatInfo.vatAmnt) || 0,
-              vatInfo.vatPerc  || '',
-            ]);
           }
         }
-      });
 
-      return { bedrijfsgegevens, accounts, vatCodes, obLines, lines };
+        self.postMessage({
+          type:     'done',
+          bedrijf:  hd.bedrijf,
+          accs:     hd.accs,
+          vats:     hd.vats,
+          obs:      hd.obs,
+          custSups: hd.custSups,
+          lineH:    LINE_H,
+          rows:     rows,
+        });
+      } catch (err) {
+        self.postMessage({ type: 'error', msg: err.message });
+      }
+    };
+  </script>
+
+  <script>
+  (function () {
+    var parsed   = null;
+    var fileName = '';
+    var worker   = null;
+
+    var fileInput = document.getElementById('fileInput');
+    var statusEl  = document.getElementById('status');
+    var progWrap  = document.getElementById('prog-wrap');
+    var progFill  = document.getElementById('prog-fill');
+    var progLabel = document.getElementById('prog-label');
+    var infoEl    = document.getElementById('info');
+    var exportBtn = document.getElementById('exportBtn');
+
+    function setStatus(msg, cls) {
+      statusEl.textContent = msg;
+      statusEl.className   = cls || '';
     }
 
-    // ── export ────────────────────────────────────────────────────────────
-    function toExcel(data, filename) {
-      var wb = XLSX.utils.book_new();
-      function addSheet(name, aoa) {
-        var ws = XLSX.utils.aoa_to_sheet(aoa);
-        // Auto column width (rough estimate)
-        var cols = aoa[0].map(function (_, ci) {
-          var max = 10;
-          aoa.forEach(function (row) {
+    function setProgress(pct, label) {
+      progWrap.style.display = 'block';
+      progFill.style.width   = pct + '%';
+      progLabel.textContent  = label || '';
+    }
+
+    function hideProgress() {
+      progWrap.style.display = 'none';
+      progFill.style.width   = '0%';
+    }
+
+    function fmt(n) { return n.toLocaleString('nl-NL'); }
+
+    // ── Excel export ─────────────────────────────────────────────────────
+    var MAX_ROWS = 1000000; // Excel hard limit is 1 048 576
+
+    function addSheet(wb, name, headers, dataRows) {
+      // Split into multiple sheets when row count exceeds Excel's limit
+      var chunks = [];
+      if (dataRows.length <= MAX_ROWS) {
+        chunks.push(dataRows);
+      } else {
+        for (var i = 0; i < dataRows.length; i += MAX_ROWS)
+          chunks.push(dataRows.slice(i, i + MAX_ROWS));
+      }
+
+      chunks.forEach(function(chunk, idx) {
+        var sheetName = chunks.length === 1 ? name : name + ' (' + (idx + 1) + ')';
+        var aoa = [headers].concat(chunk);
+        var ws  = XLSX.utils.aoa_to_sheet(aoa);
+
+        // Column widths: only scan first 10 000 rows to keep this fast
+        var sample = aoa.length > 10001 ? aoa.slice(0, 10001) : aoa;
+        var cols = headers.map(function(h, ci) {
+          var max = String(h).length + 2;
+          sample.forEach(function(row) {
             var v = row[ci] != null ? String(row[ci]) : '';
             if (v.length > max) max = v.length;
           });
-          return { wch: Math.min(max + 2, 60) };
+          return { wch: Math.min(max, 60) };
         });
         ws['!cols'] = cols;
-        XLSX.utils.book_append_sheet(wb, ws, name);
-      }
-      addSheet('Bedrijfsgegevens',   data.bedrijfsgegevens);
-      addSheet('Grootboekrekeningen',data.accounts);
-      addSheet('BTW-codes',          data.vatCodes);
-      addSheet('Beginsaldi',         data.obLines);
-      addSheet('Mutaties',           data.lines);
-      XLSX.writeFile(wb, filename);
+
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      });
     }
 
-    // ── UI ────────────────────────────────────────────────────────────────
-    var fileInput  = document.getElementById('fileInput');
-    var status     = document.getElementById('status');
-    var info       = document.getElementById('info');
-    var exportBtn  = document.getElementById('exportBtn');
-    var fileName   = '';
+    function buildExcel(data, baseName) {
+      setStatus('Excel genereren…');
+      exportBtn.disabled = true;
 
-    function setStatus(msg, cls) {
-      status.textContent = msg;
-      status.className = cls || '';
+      // Defer one tick so the status message renders before we block
+      setTimeout(function() {
+        try {
+          var wb = XLSX.utils.book_new();
+
+          var wsBedrijf = XLSX.utils.aoa_to_sheet(data.bedrijf);
+          XLSX.utils.book_append_sheet(wb, wsBedrijf, 'Bedrijfsgegevens');
+
+          addSheet(wb, 'Grootboekrekeningen', data.accs[0],     data.accs.slice(1));
+          addSheet(wb, 'BTW-codes',           data.vats[0],     data.vats.slice(1));
+          addSheet(wb, 'Beginsaldi',          data.obs[0],      data.obs.slice(1));
+          if (data.custSups && data.custSups.length > 1)
+            addSheet(wb, 'Deb_Cred',          data.custSups[0], data.custSups.slice(1));
+          addSheet(wb, 'Mutaties',            data.lineH,       data.rows);
+
+          XLSX.writeFile(wb, baseName + '_raw.xlsx');
+          setStatus('Klaar.', 'ok');
+        } catch (ex) {
+          setStatus('Excel fout: ' + ex.message, 'err');
+        }
+        exportBtn.disabled = false;
+      }, 50);
     }
 
-    fileInput.addEventListener('change', function () {
+    // ── File input ────────────────────────────────────────────────────────
+    fileInput.addEventListener('change', function() {
       var file = fileInput.files[0];
       if (!file) return;
+
+      if (worker) { worker.terminate(); worker = null; }
+
       fileName = file.name.replace(/\.(xaf|xml)$/i, '');
-      setStatus('Bezig met inlezen…');
-      info.textContent = '';
+      parsed   = null;
       exportBtn.style.display = 'none';
-      parsed = null;
+      infoEl.textContent = '';
+      hideProgress();
+      setStatus('Starten…');
 
-      var reader = new FileReader();
-      reader.onload = function (e) {
-        try {
-          var parser = new DOMParser();
-          var xmlDoc = parser.parseFromString(e.target.result, 'application/xml');
-          var err = xmlDoc.querySelector('parsererror');
-          if (err) throw new Error('XML parse fout: ' + err.textContent.slice(0, 120));
+      var src  = document.getElementById('worker-src').textContent;
+      var blob = new Blob([src], { type: 'application/javascript' });
+      worker   = new Worker(URL.createObjectURL(blob));
 
-          parsed = parseXAF(xmlDoc);
-
-          var nLines   = parsed.lines.length   - 1;
-          var nAcc     = parsed.accounts.length - 1;
-          var nOb      = parsed.obLines.length  - 1;
-          var nVat     = parsed.vatCodes.length  - 1;
+      worker.onmessage = function(e) {
+        var msg = e.data;
+        if (msg.type === 'status') {
+          setStatus(msg.msg);
+        } else if (msg.type === 'progress') {
+          var pct = msg.total > 0 ? Math.round(msg.done / msg.total * 100) : 0;
+          setProgress(pct,
+            msg.done + ' / ' + msg.total + ' dagboeken  ·  ' +
+            fmt(msg.lines) + ' mutatieregels');
+        } else if (msg.type === 'done') {
+          hideProgress();
+          parsed = msg;
+          var nLines = msg.rows.length;
+          var extra  = nLines > MAX_ROWS
+            ? ' (gesplitst in ' + Math.ceil(nLines / MAX_ROWS) + ' tabbladen)'
+            : '';
           setStatus('Ingelezen.', 'ok');
-          info.textContent =
-            nAcc + ' rekeningen · ' +
-            nOb  + ' beginsaldoregels · ' +
-            nLines + ' mutatieregels · ' +
-            nVat + ' BTW-codes';
+          var nCs = msg.custSups ? msg.custSups.length - 1 : 0;
+          infoEl.textContent =
+            (msg.accs.length - 1) + ' rekeningen · ' +
+            (msg.obs.length  - 1) + ' beginsaldoregels · ' +
+            fmt(nLines) + ' mutatieregels · ' +
+            (msg.vats.length - 1) + ' BTW-codes' +
+            (nCs > 0 ? ' · ' + nCs + ' deb/cred' : '') + extra;
           exportBtn.style.display = 'inline-block';
-        } catch (ex) {
-          setStatus('Fout: ' + ex.message, 'err');
+          worker = null;
+        } else if (msg.type === 'error') {
+          hideProgress();
+          setStatus('Fout: ' + msg.msg, 'err');
+          worker = null;
         }
       };
-      reader.onerror = function () { setStatus('Bestand kon niet worden gelezen.', 'err'); };
-      reader.readAsText(file, 'UTF-8');
+
+      worker.onerror = function(e) {
+        setStatus('Worker fout: ' + e.message, 'err');
+        worker = null;
+      };
+
+      worker.postMessage(file);
     });
 
-    exportBtn.addEventListener('click', function () {
+    exportBtn.addEventListener('click', function() {
       if (!parsed) return;
-      toExcel(parsed, fileName + '_raw.xlsx');
+      buildExcel(parsed, fileName);
     });
   })();
   </script>
