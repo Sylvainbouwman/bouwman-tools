@@ -50,8 +50,13 @@ De tool is geoptimaliseerd voor bestanden van 700 MB en groter:
 
 Ondersteunt zowel **XAF 3.2** als **XAF 4.0** (verplicht vanaf 1 januari 2026). De gedetecteerde versie wordt getoond in het Bedrijfsgegevens-tabblad.
 
+## Online beschikbaar
+
+De tool is live op **[bouwman.tools](https://bouwman.tools)** — geen installatie nodig, gewoon de browser openen.
+
 ## Technisch
 
 - Puur client-side: geen data wordt verstuurd naar een server
 - Afhankelijkheid: [SheetJS (xlsx)](https://sheetjs.com/) via CDN
 - Compatibel met Chrome, Edge en Firefox (niet IE)
+- Gehost via GitHub Pages op bouwman.tools
